@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
-
+from tqdm.auto import tqdm
 import math
 
 def shift(t):
@@ -228,3 +228,53 @@ class PretrainVit(nn.Module):
         return self.vd(vx), self.td(vy)
 
 
+class PDFReader(nn.Module):
+    def __init__(self, encoder, vocab_size, d_model=768, dim_feedforward=2048):
+        super(PDFReader, self).__init__()
+        self.encoder = encoder
+
+        self.ll = nn.Sequential(
+            nn.Linear(d_model, dim_feedforward),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(dim_feedforward, vocab_size),
+            nn.LogSoftmax(dim=-1)
+        )
+
+    def forward(self, x, y):
+        # vx, vy = self.encoder(x, y)
+        vx, vy = checkpoint.checkpoint(self.encoder, x, y, use_reentrant=False)
+
+        return self.ll(vy)
+
+    def read(self, tokenizer, x, ml=512, show_progress=False):
+
+        with torch.no_grad():
+
+            vx = self.encoder.vis_encode(x)
+
+            sy = tokenizer.encode('<s>', add_special_tokens=False, return_tensors='pt').to(x.device).repeat(vx.shape[0],
+                                                                                                            1)
+
+            rg = range(ml - sy.shape[1])
+
+            if show_progress:
+                rg = tqdm(rg)
+
+            mem = None
+
+            yp = sy
+
+            for i in rg:
+                td, nm = self.encoder.text_decode(vx, yp, mem=mem)
+                et = td[:, -1, :]
+                dc = self.ll(et).exp().argmax(dim=-1).unsqueeze(1)
+                sy = torch.cat([sy, dc], dim=-1)
+
+                yp = torch.cat([yp, dc], dim=-1)
+
+                if yp.shape[1] >= self.encoder.seq_len:
+                    mem = nm
+                    yp = dc
+
+            return sy

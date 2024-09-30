@@ -140,6 +140,7 @@ for epoch in range(epoch, epochs):
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': lh,
         }, '/projets/melodi/gsantoss/models/checkpoint_pdfre.pt')
+        torch.save(pretrain.module.vit.state_dict(), '/projets/melodi/gsantoss/models/pdfreb.pt')
 
 progress.close()
 fig, ax = plt.subplots(1, 2)
@@ -147,12 +148,13 @@ fig.tight_layout()
 ax[0].plot(lh)
 plt.show()
 
-torch.save({
-    'epoch': epoch,
-    'model_state_dict': pretrain.module.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': lh,
-}, '/projets/melodi/gsantoss/models/checkpoint_pdfre.pt')
+if lh[-1] < lowest_loss:
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': pretrain.module.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': lh,
+    }, '/projets/melodi/gsantoss/models/checkpoint_pdfre.pt')
 
-torch.save(pretrain.module.vit.state_dict(), '/projets/melodi/gsantoss/models/pdfreb.pt')
+    torch.save(pretrain.module.vit.state_dict(), '/projets/melodi/gsantoss/models/pdfreb.pt')
 print(f'loss: {lh[-1]:0.2f}')
